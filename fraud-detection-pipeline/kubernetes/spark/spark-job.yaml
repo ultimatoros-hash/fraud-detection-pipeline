@@ -1,0 +1,120 @@
+# Spark Job Submission Configuration
+# This manifest defines how to run the Spark streaming job in Kubernetes
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark
+  namespace: fraud-detection
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spark-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: spark
+    namespace: fraud-detection
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-config
+  namespace: fraud-detection
+data:
+  spark-defaults.conf: |
+    spark.master                     k8s://https://kubernetes.default.svc
+    spark.kubernetes.namespace       fraud-detection
+    spark.kubernetes.authenticate.driver.serviceAccountName spark
+    spark.kubernetes.container.image spark:3.5.0-python3
+    spark.executor.instances         2
+    spark.executor.memory            1g
+    spark.executor.cores             1
+    spark.driver.memory              1g
+    spark.sql.shuffle.partitions     6
+    spark.streaming.backpressure.enabled true
+    spark.streaming.kafka.maxRatePerPartition 1000
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fraud-detection-app
+  namespace: fraud-detection
+data:
+  fraud_detection_stream.py: |
+    # This ConfigMap holds the Spark application code
+    # In production, use a container image with the code baked in
+    # See src/streaming/fraud_detection_stream.py for full implementation
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: spark-fraud-detection
+  namespace: fraud-detection
+spec:
+  template:
+    metadata:
+      labels:
+        app: spark-fraud-detection
+    spec:
+      serviceAccountName: spark
+      restartPolicy: OnFailure
+      containers:
+        - name: spark-driver
+          image: apache/spark-py:v3.5.0
+          command:
+            - /opt/spark/bin/spark-submit
+          args:
+            - --master
+            - k8s://https://kubernetes.default.svc:443
+            - --deploy-mode
+            - client
+            - --name
+            - fraud-detection
+            - --conf
+            - spark.kubernetes.namespace=fraud-detection
+            - --conf
+            - spark.kubernetes.authenticate.driver.serviceAccountName=spark
+            - --conf
+            - spark.kubernetes.container.image=apache/spark-py:v3.5.0
+            - --conf
+            - spark.executor.instances=2
+            - --conf
+            - spark.executor.memory=1g
+            - --conf
+            - spark.executor.cores=1
+            - --conf
+            - spark.driver.memory=1g
+            - --packages
+            - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.2.1
+            - --conf
+            - spark.jars.ivy=/tmp/.ivy
+            - /opt/spark/work-dir/fraud_detection_stream.py
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.fraud-detection.svc.cluster.local:9092"
+            - name: MONGODB_URI
+              value: "mongodb://mongodb.fraud-detection.svc.cluster.local:27017/fraud_detection"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          volumeMounts:
+            - name: spark-config-volume
+              mountPath: /opt/spark/conf
+            - name: app-code
+              mountPath: /opt/spark/work-dir
+      volumes:
+        - name: spark-config-volume
+          configMap:
+            name: spark-config
+        - name: app-code
+          configMap:
+            name: fraud-detection-app

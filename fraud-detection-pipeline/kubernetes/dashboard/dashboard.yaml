@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-dashboard
+  namespace: fraud-detection
+  labels:
+    app: fraud-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-dashboard
+  template:
+    metadata:
+      labels:
+        app: fraud-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: python:3.9-slim
+          command: 
+            - /bin/sh
+            - -c
+            - |
+              pip install dash dash-bootstrap-components plotly pandas pymongo && \
+              python /app/dashboard/app.py
+          ports:
+            - containerPort: 8050
+          env:
+            - name: MONGODB_URI
+              value: "mongodb://mongodb:27017"
+            - name: MONGODB_DATABASE
+              value: "fraud_detection"
+          volumeMounts:
+            - name: dashboard-code
+              mountPath: /app
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+      volumes:
+        - name: dashboard-code
+          configMap:
+            name: dashboard-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-dashboard
+  namespace: fraud-detection
+spec:
+  type: NodePort
+  ports:
+    - port: 8050
+      targetPort: 8050
+      nodePort: 30850
+  selector:
+    app: fraud-dashboard

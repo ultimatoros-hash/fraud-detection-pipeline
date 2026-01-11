@@ -11,7 +11,6 @@
 ## Step 1: Install Python Dependencies
 
 ```powershell
-cd C:\Projects\fraud-detection-pipeline
 pip install -r requirements.txt
 ```
 
@@ -58,19 +57,16 @@ Open 3 separate PowerShell terminals:
 
 ### Terminal 1 - Transaction Producer
 ```powershell
-cd C:\Projects\fraud-detection-pipeline
 python src/producer/transaction_producer.py
 ```
 
 ### Terminal 2 - Fraud Processor (Speed Layer)
 ```powershell
-cd C:\Projects\fraud-detection-pipeline
 python src/speed/simple_processor.py
 ```
 
 ### Terminal 3 - Dashboard
 ```powershell
-cd C:\Projects\fraud-detection-pipeline
 python src/dashboard/pro_dashboard.py
 ```
 
@@ -193,3 +189,4 @@ docker exec fraud-kafka kafka-topics --bootstrap-server localhost:9092 --create 
 
 # 5. Open browser: http://localhost:8050
 ```
+
